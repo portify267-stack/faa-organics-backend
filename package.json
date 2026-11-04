@@ -1,0 +1,41 @@
+{
+  "name": "faa-organic-backend",
+  "version": "1.0.0",
+  "description": "Backend API service for Faa Organic e-commerce platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "verify": "node scripts/verify-models.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "test:auth": "node scripts/test-auth.js",
+    "test:catalog": "node scripts/test-product-category.js",
+    "test:orders": "node scripts/test-orders.js",
+    "test:sales": "node scripts/test-sales.js",
+    "test:all": "node scripts/test-auth.js && node scripts/test-product-category.js && node scripts/test-orders.js && node scripts/test-sales.js && node scripts/verify-models.js",
+    "audit": "node scripts/audit-pipeline.js"
+  },
+  "keywords": [
+    "ecommerce",
+    "organic",
+    "express",
+    "nodejs",
+    "mongodb",
+    "rest-api"
+  ],
+  "author": "Faa Organic",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
