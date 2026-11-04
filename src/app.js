@@ -102,6 +102,7 @@ app.use(sanitizeInput);
 
 // Serve static uploaded product and category assets
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+app.use('/assets/images', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 // -----------------------------------------------------------------------------
 // API Endpoints

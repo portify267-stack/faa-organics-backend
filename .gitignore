@@ -21,9 +21,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Uploads & Media (uploads generated at runtime)
-public/uploads/*
+# Uploads & Media (preserve catalog product and brand images in repository)
+public/uploads/temp*
+!public/uploads/*.jpeg
+!public/uploads/*.jpg
+!public/uploads/*.png
+!public/uploads/*.webp
 !public/uploads/.gitkeep
+!public/assets/
 
 # Editor & OS files
 .DS_Store
