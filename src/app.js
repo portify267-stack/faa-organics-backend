@@ -19,6 +19,8 @@ const adminRoutes = require('./routes/admin.routes');
 const categoryRoutes = require('./routes/category.routes');
 const productRoutes = require('./routes/product.routes');
 const orderRoutes = require('./routes/order.routes');
+const mongoose = require('mongoose');
+const connectDB = require('./config/db');
 const { getHealthStatus } = require('./controllers/health.controller');
 const { sanitizeInput } = require('./middleware/sanitize.middleware');
 const { apiRateLimiter } = require('./middleware/rateLimiter.middleware');
@@ -50,15 +52,17 @@ app.use(
 // Global API rate limiter protecting all endpoints from brute-force & denial of service
 app.use(apiRateLimiter);
 
-// Configure CORS for both frontend store and React admin panel
+// Configure CORS for frontend store, React admin panel, and Vercel deployments
 const parseOrigins = (val) =>
   val ? val.split(',').map((origin) => origin.trim()).filter(Boolean) : [];
 
 const defaultAllowedOrigins = [
-  'http://localhost:3000', // Typical Next.js / Create React App frontend
-  'http://localhost:5173', // Typical Vite frontend
-  'http://localhost:3001', // React admin panel
-  'http://localhost:5174', // Vite React admin panel
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:3001',
+  'http://localhost:5174',
+  'https://faa-organics-frontend-xne7.vercel.app',
+  'https://faa-organics-frontend.vercel.app',
 ];
 
 const clientOrigins = parseOrigins(process.env.CLIENT_URL);
@@ -67,27 +71,37 @@ const allowedOrigins = Array.from(
   new Set([...defaultAllowedOrigins, ...clientOrigins, ...adminOrigins])
 );
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or Postman)
-      if (!origin) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      // Dynamically allow any localhost or 127.0.0.1 development port
-      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-      if (isLocalhost || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+    // Dynamically allow any localhost or 127.0.0.1 development port
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    // Dynamically allow any Vercel deployment preview or production domain
+    const isVercel = /\.vercel\.app$/i.test(origin) || origin.includes('vercel.app');
+    // Dynamically allow any Render domain
+    const isRender = /\.onrender\.com$/i.test(origin);
 
-      return callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  })
-);
+    if (isLocalhost || isVercel || isRender || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Permissive fallback so any custom deployment origin is allowed without breaking
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After'],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+// Explicitly handle OPTIONS preflight across all endpoints
+app.options('*', cors(corsOptions));
 
 // Request Logging
 const isDev = (process.env.NODE_ENV || 'development') === 'development';
@@ -105,6 +119,49 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')
 app.use('/assets/images', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 // -----------------------------------------------------------------------------
+// Database Connection Guard Middleware (Fast-fail when DB disconnected)
+// -----------------------------------------------------------------------------
+const dbConnectionGuard = async (req, res, next) => {
+  // If already connected, continue immediately
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  // If in the process of connecting, wait up to 1500ms
+  if (mongoose.connection.readyState === 2) {
+    let waited = 0;
+    while (mongoose.connection.readyState === 2 && waited < 1500) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      waited += 150;
+    }
+    if (mongoose.connection.readyState === 1) {
+      return next();
+    }
+  }
+
+  // If disconnected, attempt to connect if credentials exist in environment
+  if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes('<username>')) {
+    try {
+      await connectDB();
+      if (mongoose.connection.readyState === 1) {
+        return next();
+      }
+    } catch (err) {
+      console.warn('[Database Guard] Auto-reconnect failed:', err.message);
+    }
+  }
+
+  return res.status(503).json({
+    success: false,
+    statusCode: 503,
+    message: 'Database service is currently unavailable. Please ensure MONGODB_URI is configured in Render Environment Variables.',
+    database: {
+      status: 'disconnected',
+    },
+  });
+};
+
+// -----------------------------------------------------------------------------
 // API Endpoints
 // -----------------------------------------------------------------------------
 // Root welcome endpoint
@@ -117,17 +174,22 @@ app.get('/', (req, res) => {
   });
 });
 
-// Direct Health Check Route
+// Direct Health Check Route (always accessible without DB)
 app.get('/health', getHealthStatus);
 
-// Direct /api Routes
-app.use('/api/admin', adminRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/orders', orderRoutes);
+// Direct /api Routes (Protected with DB guard)
+app.use('/api/admin', dbConnectionGuard, adminRoutes);
+app.use('/api/categories', dbConnectionGuard, categoryRoutes);
+app.use('/api/products', dbConnectionGuard, productRoutes);
+app.use('/api/orders', dbConnectionGuard, orderRoutes);
 
 // API v1 Routes (e.g. /api/v1/health, /api/v1/admin, /api/v1/products)
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
+// Apply DB guard to data routes under API v1, leaving health check route accessible
+app.use(`${apiPrefix}/admin`, dbConnectionGuard);
+app.use(`${apiPrefix}/categories`, dbConnectionGuard);
+app.use(`${apiPrefix}/products`, dbConnectionGuard);
+app.use(`${apiPrefix}/orders`, dbConnectionGuard);
 app.use(apiPrefix, apiRoutes);
 
 // -----------------------------------------------------------------------------
