@@ -58,10 +58,13 @@ const connectDB = async () => {
 
   if (!rawUri || rawUri.includes('<username>') || rawUri.includes('<password>')) {
     console.warn(
-      '⚠️  [Database] MONGODB_URI is not configured with real credentials in .env.'
+      '⚠️  [Database] MONGODB_URI is missing or contains placeholder credentials.'
     );
     console.warn(
-      '👉 [Database] Please set MONGODB_URI in your .env file to connect to MongoDB Atlas.'
+      '👉 [Database] In production (Render): Add MONGODB_URI in Render Dashboard > Environment.'
+    );
+    console.warn(
+      '👉 [Database] In local development: Set MONGODB_URI in your .env file.'
     );
     return null;
   }

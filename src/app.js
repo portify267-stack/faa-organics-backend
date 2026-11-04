@@ -6,13 +6,13 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables (.env has priority, fallback to .env.example)
-const envPath = fs.existsSync(path.resolve(process.cwd(), '.env'))
-  ? path.resolve(process.cwd(), '.env')
-  : fs.existsSync(path.resolve(process.cwd(), '.env.example'))
-  ? path.resolve(process.cwd(), '.env.example')
-  : undefined;
-dotenv.config(envPath ? { path: envPath } : undefined);
+// Load environment variables (.env in local dev; in cloud/Render, variables are injected directly into process.env)
+const localEnvPath = path.resolve(process.cwd(), '.env');
+if (fs.existsSync(localEnvPath)) {
+  dotenv.config({ path: localEnvPath });
+} else {
+  dotenv.config();
+}
 
 const apiRoutes = require('./routes');
 const adminRoutes = require('./routes/admin.routes');
