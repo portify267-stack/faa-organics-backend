@@ -14,6 +14,17 @@ const router = express.Router();
 // All routes here require valid admin authentication
 router.use(authenticateAdmin);
 
+// Ensure dynamic, un-cached responses for admin category management
+router.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+  });
+  next();
+});
+
 /**
  * @route   POST /api/admin/categories
  * @desc    Create a new category
