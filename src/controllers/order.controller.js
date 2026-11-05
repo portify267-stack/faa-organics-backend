@@ -460,7 +460,8 @@ const getAllAdminOrders = async (req, res, next) => {
       Order.find(query)
         .sort({ orderDate: -1 })
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(),
     ]);
 
     const totalPages = Math.ceil(totalOrders / limitNum);
@@ -498,17 +499,15 @@ const getAdminOrderById = async (req, res, next) => {
 
     let order = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      order = await Order.findById(id).populate(
-        'orderedProducts.product',
-        'name images slug price availabilityStatus'
-      );
+      order = await Order.findById(id)
+        .populate('orderedProducts.product', 'name images slug price availabilityStatus')
+        .lean();
     }
 
     if (!order) {
-      order = await Order.findOne({ orderId: id.toUpperCase().trim() }).populate(
-        'orderedProducts.product',
-        'name images slug price availabilityStatus'
-      );
+      order = await Order.findOne({ orderId: id.toUpperCase().trim() })
+        .populate('orderedProducts.product', 'name images slug price availabilityStatus')
+        .lean();
     }
 
     if (!order) {

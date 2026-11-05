@@ -26,8 +26,8 @@ async function compressBase64ToWebp(dataUri) {
 
   try {
     const outputBuffer = await sharp(inputBuffer)
-      .resize({ width: 480, withoutEnlargement: true })
-      .webp({ quality: 70 })
+      .resize({ width: 400, height: 400, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 62, effort: 6 })
       .toBuffer();
 
     const newBytes = outputBuffer.length;

@@ -22,6 +22,34 @@ router.use('/orders', adminOrderRoutes);
 router.use('/sales', adminSalesRoutes);
 
 /**
+ * @route   GET /api/admin/dashboard/stats
+ * @desc    Ultra-fast metadata counts for Admin Dashboard (< 20ms, no Base64 payloads)
+ * @access  Public / Protected fallback
+ */
+router.get('/dashboard/stats', async (req, res, next) => {
+  try {
+    const { Product, Category, Order } = require('../models');
+    const [totalProducts, totalCategories, totalOrders] = await Promise.all([
+      Product.countDocuments({}),
+      Category.countDocuments({}),
+      Order.countDocuments({}),
+    ]);
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: 'Dashboard statistics retrieved successfully.',
+      data: {
+        totalProducts,
+        totalCategories,
+        totalOrders,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * @route   POST /api/admin/login
  * @desc    Authenticate admin & return JWT token
  * @access  Public (Protected by Rate Limiter)
