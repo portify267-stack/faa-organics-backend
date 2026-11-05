@@ -183,8 +183,13 @@ app.get('/', (req, res) => {
   });
 });
 
-// Direct Health Check Route (always accessible without DB)
-app.get('/health', getHealthStatus);
+// Ultra-fast lightweight health/ping endpoints for UptimeRobot / ping services (prevents Render cold starts)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: Math.floor(process.uptime()), timestamp: Date.now() });
+});
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
 
 // Direct /api Routes (Protected with DB guard)
 app.use('/api/admin', dbConnectionGuard, adminRoutes);
