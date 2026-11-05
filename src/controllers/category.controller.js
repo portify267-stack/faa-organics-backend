@@ -61,7 +61,8 @@ const getActiveCategories = async (req, res, next) => {
       status: 'active',
     })
       .select('name slug description image displayOrder createdAt')
-      .sort({ displayOrder: 1, name: 1 });
+      .sort({ displayOrder: 1, name: 1 })
+      .lean();
 
     res.status(200).json(
       new ApiResponse(
@@ -97,7 +98,9 @@ const getAllAdminCategories = async (req, res, next) => {
       query.status = status;
     }
 
-    const categories = await Category.find(query).sort({ displayOrder: 1, createdAt: -1 });
+    const categories = await Category.find(query)
+      .sort({ displayOrder: 1, createdAt: -1 })
+      .lean();
 
     // Attach product count to each category for administrative visibility
     const categoriesWithCounts = await Promise.all(
@@ -109,7 +112,7 @@ const getAllAdminCategories = async (req, res, next) => {
           productCount = 0;
         }
         return {
-          ...cat.toObject(),
+          ...(cat.toObject ? cat.toObject() : cat),
           productCount,
         };
       })
@@ -141,11 +144,11 @@ const getCategoryById = async (req, res, next) => {
 
     let category = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      category = await Category.findById(id);
+      category = await Category.findById(id).lean();
     }
 
     if (!category) {
-      category = await Category.findOne({ slug: id.toLowerCase().trim() });
+      category = await Category.findOne({ slug: id.toLowerCase().trim() }).lean();
     }
 
     if (!category) {

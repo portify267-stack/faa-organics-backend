@@ -258,7 +258,8 @@ const getActiveProducts = async (req, res, next) => {
         .populate('category', 'name slug')
         .sort(sortQuery)
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(),
     ]);
 
     const totalPages = Math.ceil(totalProducts / limitNum);
@@ -296,14 +297,13 @@ const getProductById = async (req, res, next) => {
 
     let product = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      product = await Product.findById(id).populate('category', 'name slug description');
+      product = await Product.findById(id).populate('category', 'name slug description').lean();
     }
 
     if (!product) {
-      product = await Product.findOne({ slug: id.toLowerCase().trim() }).populate(
-        'category',
-        'name slug description'
-      );
+      product = await Product.findOne({ slug: id.toLowerCase().trim() })
+        .populate('category', 'name slug description')
+        .lean();
     }
 
     if (!product || product.status === 'inactive') {
@@ -371,7 +371,8 @@ const getAllAdminProducts = async (req, res, next) => {
         .populate('category', 'name slug')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(),
     ]);
 
     const totalPages = Math.ceil(totalProducts / limitNum);

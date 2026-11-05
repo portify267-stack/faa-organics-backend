@@ -151,6 +151,10 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// High-performance compound indexes for storefront catalog sorting & category filtering
+productSchema.index({ isActive: 1, status: 1, createdAt: -1 });
+productSchema.index({ category: 1, isActive: 1, status: 1 });
+
 /**
  * Pre-save hook:
  * 1. Generate slug from name

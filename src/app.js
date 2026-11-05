@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
@@ -35,6 +36,9 @@ app.disable('x-powered-by');
 // -----------------------------------------------------------------------------
 // Security & Utility Middlewares
 // -----------------------------------------------------------------------------
+// HTTP response compression (Gzip/Brotli) to cut JSON/Base64 transfer size by 50-70%
+app.use(compression());
+
 app.use(
   helmet({
     contentSecurityPolicy: false, // Allows cross-origin assets (fonts, images) while preserving security headers
