@@ -264,6 +264,13 @@ const getActiveProducts = async (req, res, next) => {
 
     const totalPages = Math.ceil(totalProducts / limitNum);
 
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
+
     res.status(200).json(
       new ApiResponse(
         200,
@@ -309,6 +316,13 @@ const getProductById = async (req, res, next) => {
     if (!product || product.status === 'inactive') {
       return next(new ApiError(404, 'Product not found.'));
     }
+
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
 
     res
       .status(200)
@@ -376,6 +390,13 @@ const getAllAdminProducts = async (req, res, next) => {
     ]);
 
     const totalPages = Math.ceil(totalProducts / limitNum);
+
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
 
     res.status(200).json(
       new ApiResponse(

@@ -64,6 +64,13 @@ const getActiveCategories = async (req, res, next) => {
       .sort({ displayOrder: 1, name: 1 })
       .lean();
 
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
+
     res.status(200).json(
       new ApiResponse(
         200,
@@ -118,6 +125,13 @@ const getAllAdminCategories = async (req, res, next) => {
       })
     );
 
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
+
     res.status(200).json(
       new ApiResponse(
         200,
@@ -154,6 +168,13 @@ const getCategoryById = async (req, res, next) => {
     if (!category) {
       return next(new ApiError(404, 'Category not found.'));
     }
+
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
 
     res
       .status(200)

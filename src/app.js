@@ -195,18 +195,27 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// Direct /api Routes (Protected with DB guard)
-app.use('/api/admin', dbConnectionGuard, adminRoutes);
-app.use('/api/categories', dbConnectionGuard, categoryRoutes);
-app.use('/api/products', dbConnectionGuard, productRoutes);
+// Zero-delay real-time headers: Disable any HTTP/CDN/browser caching for catalog & admin endpoints
+const noCacheHeaders = (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  next();
+};
+
+// Direct /api Routes (Protected with DB guard and zero-cache headers)
+app.use('/api/admin', noCacheHeaders, dbConnectionGuard, adminRoutes);
+app.use('/api/categories', noCacheHeaders, dbConnectionGuard, categoryRoutes);
+app.use('/api/products', noCacheHeaders, dbConnectionGuard, productRoutes);
 app.use('/api/orders', dbConnectionGuard, orderRoutes);
 
 // API v1 Routes (e.g. /api/v1/health, /api/v1/admin, /api/v1/products)
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
-// Apply DB guard to data routes under API v1, leaving health check route accessible
-app.use(`${apiPrefix}/admin`, dbConnectionGuard);
-app.use(`${apiPrefix}/categories`, dbConnectionGuard);
-app.use(`${apiPrefix}/products`, dbConnectionGuard);
+// Apply DB guard and zero-cache headers to data routes under API v1
+app.use(`${apiPrefix}/admin`, noCacheHeaders, dbConnectionGuard);
+app.use(`${apiPrefix}/categories`, noCacheHeaders, dbConnectionGuard);
+app.use(`${apiPrefix}/products`, noCacheHeaders, dbConnectionGuard);
 app.use(`${apiPrefix}/orders`, dbConnectionGuard);
 app.use(apiPrefix, apiRoutes);
 
