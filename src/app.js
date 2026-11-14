@@ -33,6 +33,16 @@ const app = express();
 // Disable x-powered-by to prevent server technology fingerprinting
 app.disable('x-powered-by');
 
+// Explicitly disable weak & strong ETags globally so Express never returns 304 or enables stale caching
+app.set('etag', false);
+
+// Strip conditional request headers so Express never serves 304 Not Modified
+app.use((req, res, next) => {
+  delete req.headers['if-none-match'];
+  delete req.headers['if-modified-since'];
+  next();
+});
+
 // -----------------------------------------------------------------------------
 // Security & Utility Middlewares
 // -----------------------------------------------------------------------------
@@ -195,14 +205,21 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// Zero-delay real-time headers: Disable any HTTP/CDN/browser caching for catalog & admin endpoints
+// Zero-delay real-time headers: Disable any HTTP/CDN/Cloudflare/browser caching for catalog & admin endpoints
 const noCacheHeaders = (req, res, next) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  res.set('Surrogate-Control', 'no-store');
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+    'CDN-Cache-Control': 'no-store',
+    'Cloudflare-CDN-Cache-Control': 'no-store',
+  });
   next();
 };
+
+// Global zero-cache headers for all /api endpoints
+app.use('/api', noCacheHeaders);
 
 // Direct /api Routes (Protected with DB guard and zero-cache headers)
 app.use('/api/admin', noCacheHeaders, dbConnectionGuard, adminRoutes);
@@ -212,6 +229,7 @@ app.use('/api/orders', dbConnectionGuard, orderRoutes);
 
 // API v1 Routes (e.g. /api/v1/health, /api/v1/admin, /api/v1/products)
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
+app.use(apiPrefix, noCacheHeaders);
 // Apply DB guard and zero-cache headers to data routes under API v1
 app.use(`${apiPrefix}/admin`, noCacheHeaders, dbConnectionGuard);
 app.use(`${apiPrefix}/categories`, noCacheHeaders, dbConnectionGuard);
