@@ -14,13 +14,12 @@ const router = express.Router();
 // All routes here require valid admin authentication
 router.use(authenticateAdmin);
 
-// Ensure dynamic, un-cached responses for admin category management
+// Allow HTTP revalidation (304 Not Modified) with ETag while preventing stale cached data
 router.use((req, res, next) => {
   res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Cache-Control': 'public, no-cache, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store',
+    'Vary': 'Origin, Accept-Encoding',
   });
   next();
 });

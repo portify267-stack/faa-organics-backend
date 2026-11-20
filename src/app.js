@@ -33,15 +33,8 @@ const app = express();
 // Disable x-powered-by to prevent server technology fingerprinting
 app.disable('x-powered-by');
 
-// Explicitly disable weak & strong ETags globally so Express never returns 304 or enables stale caching
-app.set('etag', false);
-
-// Strip conditional request headers so Express never serves 304 Not Modified
-app.use((req, res, next) => {
-  delete req.headers['if-none-match'];
-  delete req.headers['if-modified-since'];
-  next();
-});
+// Enable standard HTTP ETags for fast conditional revalidation (304 Not Modified)
+app.set('etag', 'weak');
 
 // -----------------------------------------------------------------------------
 // Security & Utility Middlewares
@@ -205,35 +198,32 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// Zero-delay real-time headers: Disable any HTTP/CDN/Cloudflare/browser caching for catalog & admin endpoints
-const noCacheHeaders = (req, res, next) => {
+// Conditional revalidation headers: allow HTTP/browser caching with immediate origin revalidation via ETag/304
+const revalidationHeaders = (req, res, next) => {
   res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
+    'Cache-Control': 'public, no-cache, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store',
-    'CDN-Cache-Control': 'no-store',
-    'Cloudflare-CDN-Cache-Control': 'no-store',
+    'Vary': 'Origin, Accept-Encoding',
   });
   next();
 };
 
-// Global zero-cache headers for all /api endpoints
-app.use('/api', noCacheHeaders);
+// Global revalidation headers for /api endpoints
+app.use('/api', revalidationHeaders);
 
-// Direct /api Routes (Protected with DB guard and zero-cache headers)
-app.use('/api/admin', noCacheHeaders, dbConnectionGuard, adminRoutes);
-app.use('/api/categories', noCacheHeaders, dbConnectionGuard, categoryRoutes);
-app.use('/api/products', noCacheHeaders, dbConnectionGuard, productRoutes);
+// Direct /api Routes (Protected with DB guard and revalidation headers)
+app.use('/api/admin', revalidationHeaders, dbConnectionGuard, adminRoutes);
+app.use('/api/categories', revalidationHeaders, dbConnectionGuard, categoryRoutes);
+app.use('/api/products', revalidationHeaders, dbConnectionGuard, productRoutes);
 app.use('/api/orders', dbConnectionGuard, orderRoutes);
 
 // API v1 Routes (e.g. /api/v1/health, /api/v1/admin, /api/v1/products)
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
-app.use(apiPrefix, noCacheHeaders);
-// Apply DB guard and zero-cache headers to data routes under API v1
-app.use(`${apiPrefix}/admin`, noCacheHeaders, dbConnectionGuard);
-app.use(`${apiPrefix}/categories`, noCacheHeaders, dbConnectionGuard);
-app.use(`${apiPrefix}/products`, noCacheHeaders, dbConnectionGuard);
+app.use(apiPrefix, revalidationHeaders);
+// Apply DB guard and revalidation headers to data routes under API v1
+app.use(`${apiPrefix}/admin`, revalidationHeaders, dbConnectionGuard);
+app.use(`${apiPrefix}/categories`, revalidationHeaders, dbConnectionGuard);
+app.use(`${apiPrefix}/products`, revalidationHeaders, dbConnectionGuard);
 app.use(`${apiPrefix}/orders`, dbConnectionGuard);
 app.use(apiPrefix, apiRoutes);
 

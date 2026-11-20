@@ -2,22 +2,38 @@ const express = require('express');
 const {
   getActiveProducts,
   getProductById,
+  getProductImage,
+  streamCatalogEvents,
 } = require('../controllers/product.controller');
 
 const router = express.Router();
 
-// Ensure dynamic, un-cached catalog responses so changes in MongoDB Atlas reflect instantly
+// Allow HTTP revalidation (304 Not Modified) with ETag while preventing stale cached HTML/JSON
 router.use((req, res, next) => {
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store',
-    'CDN-Cache-Control': 'no-store',
-    'Cloudflare-CDN-Cache-Control': 'no-store',
-  });
+  // Dedicated image endpoint sets its own long-term immutable caching
+  if (!req.path.includes('/image')) {
+    res.set({
+      'Cache-Control': 'public, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Vary': 'Origin, Accept-Encoding',
+    });
+  }
   next();
 });
+
+/**
+ * @route   GET /api/products/sync-stream
+ * @desc    Server-Sent Events stream for instant cross-device catalog synchronization
+ * @access  Public
+ */
+router.get('/sync-stream', streamCatalogEvents);
+
+/**
+ * @route   GET /api/products/:id/image
+ * @desc    Serve optimized binary product image with strong browser & CDN caching
+ * @access  Public
+ */
+router.get('/:id/image', getProductImage);
 
 /**
  * @route   GET /api/products

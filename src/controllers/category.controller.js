@@ -4,6 +4,12 @@ const ApiError = require('../utils/apiError');
 const ApiResponse = require('../utils/apiResponse');
 const { escapeRegex } = require('../utils/sanitize');
 const { processCategoryImage } = require('../middleware/upload.middleware');
+let catalogEvents;
+try {
+  catalogEvents = require('./product.controller').catalogEvents;
+} catch {
+  catalogEvents = null;
+}
 
 /**
  * 1. Create Category
@@ -41,6 +47,15 @@ const createCategory = async (req, res, next) => {
       isActive: isActive !== undefined ? Boolean(isActive) : status !== 'inactive',
     });
 
+    if (catalogEvents) {
+      catalogEvents.emit('catalog_updated', {
+        entity: 'category',
+        action: 'create',
+        id: category._id,
+        timestamp: Date.now(),
+      });
+    }
+
     res
       .status(201)
       .json(new ApiResponse(201, category, 'Category created successfully.'));
@@ -56,6 +71,29 @@ const createCategory = async (req, res, next) => {
  */
 const getActiveCategories = async (req, res, next) => {
   try {
+    const [totalCategories, latestCategory] = await Promise.all([
+      Category.countDocuments({ isActive: true, status: 'active' }),
+      Category.findOne({ isActive: true, status: 'active' })
+        .sort({ updatedAt: -1 })
+        .select('updatedAt')
+        .lean(),
+    ]);
+
+    const lastUpdatedTime = latestCategory?.updatedAt
+      ? new Date(latestCategory.updatedAt).getTime()
+      : 0;
+    const catEtag = `W/"cats-${totalCategories}-${lastUpdatedTime}"`;
+
+    res.set({
+      'ETag': catEtag,
+      'Cache-Control': 'public, no-cache, must-revalidate',
+      'Vary': 'Origin, Accept-Encoding',
+    });
+
+    if (req.headers['if-none-match'] === catEtag) {
+      return res.status(304).end();
+    }
+
     const categories = await Category.find({
       isActive: true,
       status: 'active',
@@ -63,15 +101,6 @@ const getActiveCategories = async (req, res, next) => {
       .select('name slug description image displayOrder createdAt')
       .sort({ displayOrder: 1, name: 1 })
       .lean();
-
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store',
-      'CDN-Cache-Control': 'no-store',
-      'Cloudflare-CDN-Cache-Control': 'no-store',
-    });
 
     res.status(200).json(
       new ApiResponse(
@@ -107,34 +136,43 @@ const getAllAdminCategories = async (req, res, next) => {
       query.status = status;
     }
 
+    const [totalCategories, latestCategory] = await Promise.all([
+      Category.countDocuments(query),
+      Category.findOne(query).sort({ updatedAt: -1 }).select('updatedAt').lean(),
+    ]);
+
+    const lastUpdatedTime = latestCategory?.updatedAt
+      ? new Date(latestCategory.updatedAt).getTime()
+      : 0;
+    const adminCatEtag = `W/"admin-cats-${totalCategories}-${lastUpdatedTime}"`;
+
+    res.set({
+      'ETag': adminCatEtag,
+      'Cache-Control': 'public, no-cache, must-revalidate',
+      'Vary': 'Origin, Accept-Encoding',
+    });
+
+    if (req.headers['if-none-match'] === adminCatEtag) {
+      return res.status(304).end();
+    }
+
     const categories = await Category.find(query)
       .sort({ displayOrder: 1, createdAt: -1 })
       .lean();
 
-    // Attach product count to each category for administrative visibility
-    const categoriesWithCounts = await Promise.all(
-      categories.map(async (cat) => {
-        let productCount = 0;
-        try {
-          productCount = await Product.countDocuments({ category: cat._id });
-        } catch {
-          productCount = 0;
-        }
-        return {
-          ...(cat.toObject ? cat.toObject() : cat),
-          productCount,
-        };
-      })
-    );
-
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store',
-      'CDN-Cache-Control': 'no-store',
-      'Cloudflare-CDN-Cache-Control': 'no-store',
+    // Attach product count to each category via single aggregation query (eliminates N roundtrips)
+    const productCounts = await Product.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+    ]);
+    const countMap = new Map();
+    productCounts.forEach((pc) => {
+      if (pc._id) countMap.set(String(pc._id), pc.count);
     });
+
+    const categoriesWithCounts = categories.map((cat) => ({
+      ...cat,
+      productCount: countMap.get(String(cat._id)) || 0,
+    }));
 
     res.status(200).json(
       new ApiResponse(
@@ -246,6 +284,15 @@ const updateCategory = async (req, res, next) => {
 
     await category.save();
 
+    if (catalogEvents) {
+      catalogEvents.emit('catalog_updated', {
+        entity: 'category',
+        action: 'update',
+        id: category._id,
+        timestamp: Date.now(),
+      });
+    }
+
     res
       .status(200)
       .json(new ApiResponse(200, category, 'Category updated successfully.'));
@@ -284,6 +331,15 @@ const deleteCategory = async (req, res, next) => {
     }
 
     await Category.findByIdAndDelete(id);
+
+    if (catalogEvents) {
+      catalogEvents.emit('catalog_updated', {
+        entity: 'category',
+        action: 'delete',
+        id,
+        timestamp: Date.now(),
+      });
+    }
 
     res.status(200).json(
       new ApiResponse(
@@ -331,6 +387,16 @@ const updateCategoryStatus = async (req, res, next) => {
     category.isActive = targetStatus === 'active';
 
     await category.save();
+
+    if (catalogEvents) {
+      catalogEvents.emit('catalog_updated', {
+        entity: 'category',
+        action: 'status',
+        id: category._id,
+        status: category.status,
+        timestamp: Date.now(),
+      });
+    }
 
     res.status(200).json(
       new ApiResponse(
